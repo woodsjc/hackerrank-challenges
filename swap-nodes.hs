@@ -17,7 +17,7 @@ main = do
   	let 
   		nodes = map read $ concat $ head $ split_args ([["1"]] ++ tmp)
 		swaps = tail $ map read $ concat $ head $ tail $ split_args tmp
-	mapM_ putStrLn $ map (unwords. map show) $ run_swaps swaps $ buildTree nodes
+	mapM_ putStrLn $ map (unwords. map show) $ run_swaps swaps $ buildTree $ convert_args nodes
 	
 
 split_args :: [[String]] -> [[[String]]]
