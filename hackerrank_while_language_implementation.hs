@@ -1,3 +1,12 @@
+{-
+  sources:
+    https://mukeshiiitm.wordpress.com/2014/01/30/while-interpreter/
+    http://www.stephendiehl.com/llvm/
+    https://hackage.haskell.org/package/while-lang-parser-0.1.0.0/docs/src/Language-While-Parser.html
+    https://github.com/m00nlight/hackerrank/blob/master/functional/Interpreter-and-Compiler/While-Language/main.hs
+-}
+
+
 import System.IO
 import Control.Monad
 import Text.ParserCombinators.Parsec
