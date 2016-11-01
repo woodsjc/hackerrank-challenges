@@ -4,6 +4,7 @@ import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
 import Text.ParserCombinators.Parsec.Language
 import qualified Text.ParserCombinators.Parsec.Token as Token
+import qualified Data.Map                            as M
 
 
 -- a ::= x | n | -a | a opa a
@@ -61,7 +62,7 @@ languageDef =
                                      , "and"
                                      , "or"
                                      ]
-           , Token.reservedOpNames = ["+", "-", "*", "/", ":="
+           , Token.reservedOpNames = [ "+", "-", "*", "/", ":="
                                      , "<", ">", "and", "or", "not"
                                      ]
            }
@@ -193,8 +194,50 @@ parseFile file = do
     Right r -> return r
 
 
+type Env = M.Map String Integer
+
+
+evalA :: AExpr -> Env -> Integer
+evalA (Var v)            env = M.findWithDefault 0 v env
+evalA (IntConst n)       _   = n
+evalA (Neg e)            env = -(evalA e env)
+evalA (ABinary op e1 e2) env = 
+  case op of
+    Add      -> evalA e1 env + evalA e2 env
+    Subtract -> evalA e1 env - evalA e2 env
+    Multiply -> evalA e1 env * evalA e2 env
+    Divide   -> (evalA e1 env) `div` (evalA e2 env)
+
+
+evalB :: BExpr -> Env -> Bool
+evalB (BoolConst b)      _   = b
+evalB (Not e)            env = not $ evalB e env
+evalB (BBinary op e1 e2) env = 
+  case op of 
+    And -> evalB e1 env && evalB e2 env
+    _   -> evalB e1 env || evalB e2 env
+evalB (RBinary op e1 e2) env = 
+  case op of
+    Greater -> evalA e1 env > evalA e2 env
+    _       -> evalA e1 env < evalA e2 env
+
+
+interpreter :: Stmt -> Env -> Env
+interpreter (Assign v expr) env = M.insert v (evalA expr env) env
+interpreter (Seq [])        env = env
+interpreter (Seq (x:xs))    env = interpreter (Seq xs) (interpreter x env)
+interpreter (If e st1 st2) env
+          | evalB e env = interpreter st1 env
+          | otherwise   = interpreter st2 env
+interpreter (While e st) env
+          | not (evalB e env) = env
+          | otherwise         = interpreter (While e st) newEnv
+  where
+    newEnv = interpreter st env
+
+
 main :: IO()
-main = getContents >>= (\x -> case
-  parse whileParser "" x of
-  Left e  -> print e >> fail "parse error"
-  Right r -> print r)
+main = do
+  ast <- fmap parseString getContents
+  mapM_ (\(x, y) -> putStrLn $ x ++ " " ++ (show y)) $  M.toList $ interpreter ast M.empty
+  
