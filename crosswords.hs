@@ -1,19 +1,18 @@
-import Data.Function   (on)
-import Data.List       (sort, sortBy, isPrefixOf)
+import Data.Function (on)
+import Data.List     (sort, sortBy, isPrefixOf)
 import Data.Maybe
 
 main :: IO()
 main = do
-	args <- getContents
-	mapM_ print $ solve $ lines args
+	args <- fmap lines getContents
+	mapM_ putStrLn $ solve args
 
 
 parse_crosswords :: String -> [String]
 parse_crosswords str = reverse. sortBy (compare `on` length) $ splitOn ";" str
 
 
---choosing the right crossword needs to be at a high level so it will remove from the potential list
---this should send back list of lengths & position [len, start pos, end pos]
+--list of lengths & position [len, start pos, end pos]
 parse_str :: Int -> String -> [Int]
 parse_str n [] = []
 parse_str n (x:xs)  
@@ -24,6 +23,7 @@ parse_str n (x:xs)
            | otherwise = parse_str (n+1) xs 
 
 
+--didn't know about drop when wrote this
 pop :: Int -> String -> String
 pop _ [] = []
 pop 0 ps = ps
@@ -50,53 +50,61 @@ parse_down args = map (parse_str 0) $
 --not sure what type will end up being
 --likely need to rewrite parsing to include positions
 solve :: [String] -> [String]
-solve args = solve' ((parse_across args) ++ [[0]])
-                    ((parse_down args) ++ [[0]])
-                    (parse_crosswords $ last args)
-                    (init args)
+solve args = solve'' (parse_across args)
+                     (parse_down args)
+                     (parse_crosswords $ last args)
+                     [init args]
 
 
---start up a recursive instance for each instance of across or down equal in length to crossword answer
---if fill returns maybe need to backtrack or swap order of crosswords 
---maybe always try to fit last of same length, but without the infinite loop
---not sure how to preserve list when there isn't a hit in fill may need another parameter 
---or just rerun parse on the updated ans
---need to get the x&y position of the puzzle into fill (not currently happening)
-solve' :: [[Int]] -> [[Int]] -> [String] -> [String] -> [String]
-solve' across down [] ans = ans
-solve' []     []   cw ans = ans
-solve' across down cw ans 
-     | (\[z,_,_] -> z) (head across) == length (head cw) = (\x -> case x of 
-                                            Just x  -> solve' (tail across) down (tail cw) x
-                                            Nothing -> solve' (tail across) down cw        ans
-                                            ) $ fill_cw (head cw) (z, \(a1,a2,a3) -> (head across),(last across)) ans
-     | (\[z,_,_] -> z) (head down  ) == length (head cw) = (\x -> case x of
-                                            Just x  -> solve' across (tail down) (tail cw) x
-                                            Nothing -> solve' (tail across) down cw        ans
-                                            ) $ fill_cw (head cw) (last down) ans
-     | otherwise                                         = ans
+{-
+http://stackoverflow.com/questions/943113/algorithm-to-generate-a-crossword
+parse across and down to find open spaces for words
+go through word list from the largest to smallest
+if a word can't fit due to letter collision try another space
+    if nomore spaces wipe prior tree for that level (length of position) and try to fill
+    need to keep track of that level and what has been tried
+-}
+solve'' :: [[Int]] -> [[Int]] -> [String] -> [[String]] -> [String]
+solve'' across down []     ans = head ans
+solve'' []     []   cw     ans = head ans
+solve'' across down (c:cs) ans = solve'' across
+                                         down
+                                         cs
+                                         $ rm_nothing $ concat $ map 
+                                           (\x-> map (\y -> fill_cw c x y) ans)
+                                           (filter (\r -> length r == 5) (pad across 0)++(pad down 1))
 
 
-solve'' []     []   cw ans a_pos d_pos = ans
-solve'' across down [] ans a_pos d_pos = ans
-solve'' across down cw ans a_pos d_pos = 
+pad xs n = merge (map (\x -> x ++ [n]) xs) [0..(length xs - 1)]
 
 
+merge:: [[Int]] -> [Int] -> [[Int]]
+merge xs     []     = xs
+merge []     ys     = [ys]
+merge (x:xs) (y:ys) = [x ++ [y]] ++ merge xs ys
 
---fill should use info from match length
---z > 0 is across and z <= 0 is down
---need to recursively fill based on highest blanks in puzzle
---not 100% sure how to deal with multiple matches
+
+rm_nothing []     = []
+rm_nothing (x:xs) = case x of 
+                    Just z  -> z : rm_nothing xs
+                    Nothing -> rm_nothing xs
+
+
+--l=length, x=start pos, y=end pos, z=across:0 or down:1, r=pos in puzzle
 fill_cw :: String -> [Int] -> [String] -> Maybe [String]
-fill_cw cw [x,y,z] puzzle 
-      | z >  0 = (\p -> if can_fill p y cw
-                          then Just $ insert_list (fill p y cw) x puzzle
+fill_cw cw [l,x,y,z,r] puzzle 
+      | z == 0 = (\p -> if can_fill p x cw
+                          then Just $ insert_list (fill p x cw) r puzzle
                           else Nothing
-                   ) $ puzzle !! x
-      | z <= 0 = (\p -> if can_fill p y cw
-                          then Just $ insert_list (fill p y cw) x (puzzle) --this needs to be sideways for down
+                   ) $ puzzle !! r
+      | z == 1 = (\p -> if can_fill p x cw
+                          then Just $ convert $ insert_list (fill p x cw) r (convert puzzle)
                           else Nothing
-                   ) $ map (!! x) puzzle
+                   ) $ convert puzzle !! r
+fill_cw _ _ _ = Nothing
+
+
+convert p = map (\x -> map (!! x) p) [0..(length p - 1)] 
 
 
 insert_list :: String -> Int -> [String] -> [String]
@@ -107,7 +115,7 @@ insert_list str n puzzle = (\(ys,zs) ->
 
 
 can_fill :: String -> Int -> String -> Bool
-can_fill str n cw | n > length str && length cw > 0 = False
+can_fill str n cw | n > length str - 1 && length cw > 0 = False
 can_fill str n [] = True
 can_fill str n cw = if str !! n == '-' || str !! n == head cw 
                       then can_fill str (n+1) (tail cw)
@@ -117,7 +125,6 @@ can_fill str n cw = if str !! n == '-' || str !! n == head cw
 --doesnt work with reverse need to use split & at
 fill :: String -> Int -> String -> String
 fill str n cw = (\(ys,zs) -> ys ++ cw ++ pop (length cw) zs) $ splitAt n str
-
 
 
 --http://stackoverflow.com/questions/5874600/cutting-a-string-into-a-list-in-haskell/5874939#5874939
