@@ -1,11 +1,13 @@
-import Data.List (elemIndex)
+import Data.List (elemIndex, group, sort)
 import Data.Maybe (fromJust)
 
 getList :: Int -> IO[String]
 getList n = if n==0 then return [] else do i <- getLine; is <- getList(n-1); return (i:is)
 
-displayPathtoPrincess :: Int -> [String] -> [String]
-displayPathtoPrincess i grid = convert (findChar 0 'm' grid) (findChar 0 'p' grid)
+displayPathtoPrincess :: Int -> [String] -> String
+displayPathtoPrincess i grid = grabMost $ convert (findChar 0 'm' grid) (findChar 0 'p' grid)
+
+grabMost z = snd $ last $ sort $ map (\x -> (length x, head x)) $ group z
 
 convert (mx,my) (px,py) = s (mx-px, my-py)
     where s (sx,sy)
@@ -26,7 +28,9 @@ findChar n c grid = (\x -> if x == Nothing
 main :: IO()
 main = do
     n <- getLine
+    _ <- getLine
     let i = read n
     grid <- getList i
-    mapM_ putStrLn $ displayPathtoPrincess i grid
+    putStrLn $ displayPathtoPrincess i grid
+
 
