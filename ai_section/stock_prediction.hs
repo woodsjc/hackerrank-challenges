@@ -9,8 +9,8 @@ main = do
     let m = read $ pad $ head $ words $ head contents
         index = map words $ tail contents
     putStrLn $ (\x -> show (length $ lines x) ++ "\n" ++ x) 
-             $ concatMap (\x -> if length x > 0 then x ++ "\n" else "") 
-             $ actions m $ rank_indicies index
+              $ concatMap (\x -> if length x > 0 then x ++ "\n" else "") 
+                $ actions m $ rank_indicies index
      where pad x = if '.' `elem` x then x else x ++ ".0"
 
 read_index :: [String] -> Index
@@ -31,11 +31,14 @@ index_rating (Index name owned prices) = last prices / (average $ init prices)
     where range = take 3 $ drop 1 $ reverse prices
 
 --cap at 1/3 current money per stock
+--need to know buy or sell status of all items before assigning variable weights
+--current weighting is pretty bad
 actions :: Double -> [(Double, Index)] -> [String]
 actions _ [] = []
 actions m (i@(r,index):is) = (\buy_price -> 
     [buy_or_sell buy_price i] ++ actions (m-buy_price) is
-    ) $ max_buy m (get_current_price index) * 0.5
+    ) $ max_buy m (get_current_price index)
+      * (if length is > 0 && fst (head is) < 0.5 then 0.66 else 1.0)
 
 --need a way to figure out how many to buy
 --take good deals & map onto avaliable (equally)
@@ -55,9 +58,14 @@ max_buy money price = if money > price
 get_prior_rating :: Index -> Double
 get_prior_rating (Index name owned prices) = (last prices) / (last $ tail prices)
 
+--only looks to at most 5 prior prices
 downward_indicator :: Index -> Bool
-downward_indicator (Index name owned prices) = 
-    if last prices > (last $ tail prices) 
-       && (last $ tail prices) > (last $ tail $ tail prices)
-         then True
-         else False
+downward_indicator (Index name owned prices) = dec 1 prices
+  where dec n []     = False
+        dec n prices
+          | n > 5 = True
+          | length prices < 2 = True
+          | otherwise = if last prices > (last $ init prices) 
+                           then False 
+                           else dec (n+1) (init prices)
+
